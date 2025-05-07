@@ -1,0 +1,10 @@
+name: dashboardbemfeita
+title:
+username: baianosprojects
+account: baianosprojects
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 14607429
+bundleId: 10207004
+url: https://baianosprojects.shinyapps.io/dashboardbemfeita/
+version: 1

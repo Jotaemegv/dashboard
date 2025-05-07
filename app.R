@@ -88,7 +88,9 @@ ui <- dashboardPage(
     sidebarMenu(id = "tabs", selected = "nova",
                 menuItem("Gráficos", tabName = "nova", icon = icon("chart-bar")),
                 menuItem("Visualizar Mapa de hotspots", tabName = "mapa", icon = icon("map")),
-                menuItem("Relatório", tabName = "relatorio", icon = icon("file-alt"))
+                menuItem("Relatório", tabName = "relatorio", icon = icon("file-alt")),
+                menuItem("Fontes", tabName = "fontes", icon = icon("info-circle"))
+                
     )
   ),
   
@@ -259,32 +261,70 @@ ui <- dashboardPage(
                 )
               )
       ),
+      tabItem(tabName = "fontes",
+              fluidRow(
+                column(width = 12,
+                       box(
+                         width = 12,
+                         solidHeader = TRUE,
+                         title = "Fontes dos Dados",
+                         status = "primary",
+                         div(style = "font-size:16px; padding: 10px;",
+                             HTML("
+            <p><b>Fonte dos dados:</b></p>
+            <ul>
+              <li><b>DATASUS</b> – Departamento de Informática do SUS</li>
+              <li><b>IBGE</b> – Instituto Brasileiro de Geografia e Estatística</li>
+              
+              <li><b>Ministério da Saúde</b> – Dados públicos de saúde</li>
+            </ul>
+            <p>----------------- 2025</p>
+          ")
+                         )
+                       )
+                )
+              )
+      ),
+      
       
       # --- Aba Relatório ---
+      # Na aba "Relatório" do UI
       tabItem(tabName = "relatorio",
               fluidRow(
                 column(width = 6,
                        selectInput("relatorio_municipio", "Município:",
                                    choices = c("Paraná", unique(shape_pr$NM_MUN)),
                                    selected = "Paraná")
-                ),
-    
+                )
               ),
               fluidRow(
                 column(width = 12,
                        box(
                          width = 12,
                          solidHeader = TRUE,
-                         title = "Relatório de Variáveis Associadas as Fratudas de Quadril",
+                         title = "Relatório de Variáveis Associadas às Fraturas de Quadril",
                          withSpinner(htmlOutput("relatorio_completo"))
+                       )
+                )
+              ),
+              fluidRow(
+                column(width = 12,
+                       box(
+                         width = 12,
+                         solidHeader = TRUE,
+                         title = "Mapa do Município Selecionado",
+                         leafletOutput("mapa_municipio")
                        )
                 )
               )
       )
       
+      
     )
   )
+  
 )
+
 
 
 # === SERVER
@@ -337,22 +377,42 @@ server <- function(input, output, session) {
   })
   
   output$mapa_dinamico <- renderLeaflet({
+    library(geobr)
+    
+    estados_brasil <- read_state(year = 2020)
+    parana_estado <- estados_brasil %>% filter(abbrev_state == "PR")
+    vizinhos_estado <- estados_brasil %>% filter(abbrev_state != "PR")
+    
     if (is.null(municipio_selecionado())) {
-      leaflet(data = shape_pr, options = leafletOptions(minZoom = 6, maxZoom = 9)) %>%
+      leaflet(options = leafletOptions(minZoom = 6, maxZoom = 9)) %>%
         addProviderTiles("CartoDB.Positron") %>%
-        setMaxBounds(
-          lng1 = -55.5, lat1 = -27.7,
-          lng2 = -48.0, lat2 = -22.5
-        ) %>%
-        addPolygons(
-          fillColor = "#025959", weight = 1, opacity = 1, color = "white",
-          dashArray = "3", fillOpacity = 0.7,
-          highlight = highlightOptions(weight = 2, color = "#666", fillOpacity = 0.9, bringToFront = TRUE),
-          label = ~NM_MUN, layerId = ~CD_MUN,
-          labelOptions = labelOptions(style = list("font-weight" = "normal"), textsize = "13px")
-        )
-      
-      
+        
+        # Estados vizinhos (bordas finas e cinza claro)
+        addPolygons(data = vizinhos_estado,
+                    fillColor = "#d9d9d9",
+                    color = "#bdbdbd",
+                    weight = 1,
+                    fillOpacity = 0.3,
+                    label = ~name_state) %>%
+        
+        # Paraná com borda preta sólida e espessa
+        addPolygons(data = parana_estado,
+                    fillColor = "#FFFFFF00",  # transparente
+                    color = "black",         # borda preta
+                    weight = 4,              # espessura
+                    opacity = 1,
+                    fillOpacity = 0,         # sem preenchimento
+                    label = "Paraná") %>%
+        
+        # Municípios do PR
+        addPolygons(data = shape_pr,
+                    fillColor = "#025959", weight = 1, opacity = 1, color = "white",
+                    dashArray = "3", fillOpacity = 0.7,
+                    highlight = highlightOptions(weight = 2, color = "#666", fillOpacity = 0.9, bringToFront = TRUE),
+                    label = ~NM_MUN, layerId = ~CD_MUN,
+                    labelOptions = labelOptions(style = list("font-weight" = "normal"), textsize = "13px")) %>%
+        
+        setMaxBounds(lng1 = -55.5, lat1 = -27.7, lng2 = -48.0, lat2 = -22.5)
     } else {
       muni <- shape_pr %>% filter(CD_MUN_6 == municipio_selecionado())
       leaflet(data = muni) %>%
@@ -362,6 +422,7 @@ server <- function(input, output, session) {
                 lat = st_coordinates(st_centroid(st_geometry(muni)))[2], zoom = 10)
     }
   })
+  
   
   output$hotspot_plot <- renderImage({
     list(
@@ -611,23 +672,25 @@ server <- function(input, output, session) {
         text = element_text(color = "#012340", size = 13)
       )
   })
-  
-  
-  
   output$mapa_setas <- renderUI({
     df <- read.csv("BANCO_FINAL_AIHs_CLASSIFICADAS(1).csv", encoding = "latin1")
     df$ANO_CMPT <- as.numeric(df$ANO_CMPT)
     
+    # Filtrar pelo ano selecionado
     if (input$ano_grafico1 != "Todos") {
       df <- df %>% filter(ANO_CMPT == as.numeric(input$ano_grafico1))
     }
     
+    # Filtrar somente as transferências externas (UE)
     df <- df %>% filter(COD_ID == "UE")
     
+    # Filtrar apenas as transferências originadas do município selecionado
     if (!is.null(municipio_selecionado())) {
-      df <- df %>% filter(MUNIC_RES == as.numeric(municipio_selecionado()))
+      mun_sel <- as.numeric(municipio_selecionado())
+      df <- df %>% filter(MUNIC_RES == mun_sel)  # Só manter transferências que começam no município selecionado
     }
     
+    # Se não houver transferências, mostrar mensagem
     if (nrow(df) == 0) {
       return(div(
         style = "height:300px; display:flex; align-items:center; justify-content:right; font-size:16px; font-weight:bold;color:#000000",
@@ -635,25 +698,55 @@ server <- function(input, output, session) {
       ))
     }
     
+    # Gerar o mapa interativo
     output$leaflet_mapa <- renderLeaflet({
-      df$MUNIC_RES <- as.character(df$MUNIC_RES)
-      df$MUNIC_MOV <- as.character(df$MUNIC_MOV)
-      
+      # Coordenadas dos municípios
       coord_muni <- shape_pr %>%
         st_centroid() %>%
         st_coordinates() %>%
         as.data.frame() %>%
-        bind_cols(st_drop_geometry(shape_pr) %>% select(CD_MUN_6))
+        bind_cols(st_drop_geometry(shape_pr) %>% select(CD_MUN_6)) %>%
+        rename(lon = X, lat = Y)
       
-      names(coord_muni) <- c("lon", "lat", "CD_MUN_6")
+      # Se nenhum município estiver selecionado
+      if (is.null(municipio_selecionado())) {
+        return(
+          leaflet() %>%
+            addProviderTiles("CartoDB.Positron")
+        )
+      }
       
+      # Converte códigos
+      df$MUNIC_RES <- as.character(df$MUNIC_RES)
+      df$MUNIC_MOV <- as.character(df$MUNIC_MOV)
+      mun_sel <- as.character(municipio_selecionado())
+      
+      # Coordenada da origem (município selecionado)
+      origem_coord <- coord_muni %>%
+        filter(CD_MUN_6 == mun_sel) %>%
+        select(lon_orig = lon, lat_orig = lat)
+      
+      # Se a coordenada do município não foi encontrada
+      if (nrow(origem_coord) == 0) {
+        return(
+          leaflet() %>%
+            addProviderTiles("CartoDB.Positron")
+        )
+      }
+      
+      # Filtra apenas transferências partindo DO município selecionado
       df_coords <- df %>%
-        left_join(coord_muni, by = c("MUNIC_RES" = "CD_MUN_6")) %>%
-        rename(lat_orig = lat, lon_orig = lon) %>%
+        filter(COD_ID == "UE", MUNIC_RES == mun_sel) %>%
+        distinct(MUNIC_MOV) %>%
         left_join(coord_muni, by = c("MUNIC_MOV" = "CD_MUN_6")) %>%
-        rename(lat_dest = lat, lon_dest = lon) %>%
-        filter(!is.na(lat_dest), !is.na(lat_orig))
+        rename(lon_dest = lon, lat_dest = lat) %>%
+        mutate(
+          lon_orig = origem_coord$lon_orig[1],
+          lat_orig = origem_coord$lat_orig[1]
+        ) %>%
+        filter(!is.na(lat_dest), !is.na(lon_dest))
       
+      # Desenha o mapa
       leaflet() %>%
         addProviderTiles("CartoDB.Positron") %>%
         addPolylines(
@@ -661,15 +754,50 @@ server <- function(input, output, session) {
           lng = ~c(lon_orig, lon_dest),
           lat = ~c(lat_orig, lat_dest),
           color = "blue",
-          weight = 1.5,
-          opacity = 0.6,
-          group = "setas"
+          weight = 2,
+          opacity = 0.8
         )
-      
     })
     
     leafletOutput("leaflet_mapa", height = "473px")
   })
+  
+  # No servidor
+  output$mapa_municipio <- renderLeaflet({
+    municipio <- input$relatorio_municipio  # Obter o município selecionado
+    
+    # Filtra os dados do município
+    municipio_data <- shape_pr %>% filter(NM_MUN == municipio)
+    
+    # Verificar se o filtro encontrou dados
+    print(municipio_data)  # Adicione esta linha para depuração
+    
+    # Se não encontrar dados
+    if (nrow(municipio_data) == 0) {
+      return(leaflet() %>% addTiles())  # Retorna um mapa em branco se nenhum município for encontrado
+    }
+    
+    # Criar o mapa
+    mapa <- leaflet(municipio_data) %>%
+      addTiles() %>%
+      addPolygons(
+        fillColor = "blue", 
+        weight = 1, 
+        color = "white", 
+        opacity = 0.5, 
+        fillOpacity = 0.7,
+        label = ~NM_MUN  # Rótulo com o nome do município
+      ) %>%
+      setView(
+        lng = st_centroid(municipio_data)$coords[1], 
+        lat = st_centroid(municipio_data)$coords[2], 
+        zoom = 10  # Ajuste o zoom conforme necessário
+      )
+    
+    return(mapa)
+  })
+  
+  
   
   output$relatorio_completo <- renderUI({
     df_fraturas <- read.csv("BANCO_FINAL_AIHs_CLASSIFICADAS(1).csv", encoding = "latin1")
@@ -727,7 +855,7 @@ server <- function(input, output, session) {
     }
     
     HTML(paste0(
-      "<p style='font-size:18px;'><b>Total de quedas registradas:</b> ", total_quedas, "</p>",
+      "<p style='font-size:18px;'><b>Total de  registradas:</b> ", total_quedas, "</p>",
       "<hr>",
       "<p style='font-size:18px;'><b>Indicadores Gerais:</b></p>",
       "<ul>",

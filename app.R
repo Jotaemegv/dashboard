@@ -1,13 +1,19 @@
 library(shiny)
 library(shinydashboard)
 library(ggplot2)
+library(grid) 
 library(dplyr)
 library(sf)
 library(readr)
-library(ggpattern)
 library(leaflet)
 library(rmarkdown)
 library(shinycssloaders)
+library(geobr)
+library(tidyr)
+library(stringr)
+library(pagedown)
+library(webshot2)
+
 
 # === LEITURA DOS DADOS ===
 shape_pr <- st_read("PR_Municipios_2023.shp") %>%
@@ -15,65 +21,6 @@ shape_pr <- st_read("PR_Municipios_2023.shp") %>%
   mutate(CD_MUN_6 = substr(as.character(CD_MUN), 1, 6))  # Truncar para 6 dígitos
 bbox <- st_bbox(shape_pr)
 
-ordered_patterns <- c(
-  "New Hot Spot", "Consecutive Hot Spot", "Intensifying Hot Spot",
-  "Persistent Hot Spot", "Diminishing Hot Spot", "Sporadic Hot Spot",
-  "Oscillating Hot Spot", "Historical Hot Spot",
-  "New Cold Spot", "Consecutive Cold Spot", "Intensifying Cold Spot",
-  "Persistent Cold Spot", "Diminishing Cold Spot", "Sporadic Cold Spot",
-  "Oscillating Cold Spot", "Historical Cold Spot",
-  "No Pattern Detected"
-)
-
-todos_patterns <- ordered_patterns
-cores_hotspot <- setNames(rep("gray90", length(todos_patterns)), todos_patterns)
-cores_hotspot["New Hot Spot"] <- "#CB0800"
-cores_hotspot["Consecutive Hot Spot"] <- "#BD6D5E"
-cores_hotspot["Persistent Hot Spot"] <- "#851400"
-cores_hotspot["Oscillating Hot Spot"] <- "#3468A8"
-cores_hotspot["Oscillating Cold Spot"] <- "#EDA882"
-cores_hotspot["New Cold Spot"] <- "#174C9C"
-cores_hotspot["Consecutive Cold Spot"] <- "#6883BA"
-cores_hotspot["Persistent Cold Spot"] <- "#1B3659"
-cores_hotspot["Sporadic Hot Spot"] <- "#FFFFFF"
-cores_hotspot["Sporadic Cold Spot"] <- "#FFFFFF"
-cores_hotspot["Diminishing Cold Spot"] <- "#D4E4EA"
-cores_hotspot["Diminishing Hot Spot"] <- "#FAC99D"
-cores_hotspot["Intensifying Hot Spot"] <- "#E01709"
-cores_hotspot["Intensifying Cold Spot"] <- "#4571AD"
-cores_hotspot["Historical Hot Spot"] <- "#DEBCA4"
-cores_hotspot["Historical Cold Spot"] <- "#BCC6CC"
-cores_hotspot["No Pattern Detected"] <- "#F5F5F5"
-
-pattern_list <- setNames(rep("none", length(todos_patterns)), todos_patterns)
-pattern_list["Oscillating Hot Spot"] <- "circle"
-pattern_list["Oscillating Cold Spot"] <- "circle"
-pattern_list["Sporadic Hot Spot"] <- "circle"
-pattern_list["Sporadic Cold Spot"] <- "circle"
-pattern_list["Consecutive Hot Spot"] <- "none"
-pattern_list["Consecutive Cold Spot"] <- "none"
-pattern_list["Persistent Hot Spot"] <- "crosshatch"
-pattern_list["Persistent Cold Spot"] <- "none"
-pattern_list["Diminishing Cold Spot"] <- "none"
-
-pattern_fill_map <- setNames(rep(NA, length(todos_patterns)), todos_patterns)
-pattern_fill_map["Oscillating Hot Spot"] <- "#EDA882"
-pattern_fill_map["Oscillating Cold Spot"] <- "#3468A8"
-pattern_fill_map["Sporadic Hot Spot"] <- "#F5D2B5"
-pattern_fill_map["Sporadic Cold Spot"] <- "#9EB6CF"
-pattern_fill_map["Persistent Hot Spot"] <- "white"
-
-dados_hotspot <- read_delim("EHA_TxSuavFraturas.csv", delim = ";") %>%
-  mutate(PATTERN = factor(trimws(PATTERN), levels = ordered_patterns))
-
-shape_pr$PATTERN <- dados_hotspot$PATTERN
-shape_pr <- shape_pr %>%
-  mutate(
-    borda_color = ifelse(PATTERN == "Diminishing Cold Spot", "#AFC4CC", "white"),
-    borda_size = ifelse(PATTERN == "Diminishing Cold Spot", 0.9, 0.3)
-  )
-
-# === UI
 # === UI
 ui <- dashboardPage(
   skin = "black",
@@ -88,9 +35,7 @@ ui <- dashboardPage(
     sidebarMenu(id = "tabs", selected = "nova",
                 menuItem("Gráficos", tabName = "nova", icon = icon("chart-bar")),
                 menuItem("Visualizar Mapa de hotspots", tabName = "mapa", icon = icon("map")),
-                menuItem("Relatório", tabName = "relatorio", icon = icon("file-alt")),
-                menuItem("Fontes", tabName = "fontes", icon = icon("info-circle"))
-                
+                menuItem("Relatório", tabName = "relatorio", icon = icon("file-alt"))
     )
   ),
   
@@ -168,13 +113,31 @@ ui <- dashboardPage(
                          style = "height: 300px;",
                          div(
                            style = "height: 100%; display: flex; flex-direction: column; justify-content: space-between;",
+                           
+                           # Seletor de MUNICÍPIO
                            div(
                              style = "margin-bottom: 5px;",
-                             selectInput("filtro_municipio", "Escolha um município:",
-                                         choices = c("Paraná", shape_pr$NM_MUN),
-                                         selected = "Paraná")
+                             selectInput(
+                               "filtro_municipio", "Escolha um município:",
+                               choices   = c("Paraná", shape_pr$NM_MUN),
+                               selected  = "Paraná"
+                             )
                            ),
-                           withSpinner(leafletOutput("mapa_dinamico", height = "210px"))
+                           
+                           # Seletor de ANO  (movido para cá)
+                           div(
+                             style = "margin-bottom: 5px;",
+                             selectInput(
+                               "ano_grafico1", "Ano:",
+                               choices   = c("Todos", 2010:2021),
+                               selected  = "Todos"
+                             )
+                           ),
+                           
+                           # Mapa
+                           withSpinner(
+                             leafletOutput("mapa_dinamico", height = "210px")
+                           )
                          )
                        ),
                        box(
@@ -184,16 +147,58 @@ ui <- dashboardPage(
                          style = "height: 500px;",
                          div(
                            style = "height: 100%; display: flex; flex-direction: column; justify-content: space-between;",
-                           div(
-                             style = "margin-bottom: 5px;",
-                             selectInput("ano_grafico1", "Ano:", choices = c("Todos", 2010:2021), selected = "Todos")
-                           ),
-                           withSpinner(plotOutput("grafico_1", height = "380px"))
+                           
+                           # (Seletor de ano REMOVIDO)
+                           
+                           withSpinner(
+                             plotOutput("grafico_1", height = "380px")
+                           )
                          )
                        )
                 ),
                 
                 column(width = 6,
+                       
+                       ##################################################################
+                       ## NOVO LAYOUT: 3 BOXES QUADRADAS AZUIS ACIMA DO GRÁFICO ÓBITOS ##
+                       ##################################################################
+                       fluidRow(
+                         box(
+                           width = 4, solidHeader = TRUE, status = "primary",
+                           style = "height: 120px; display:flex; align-items:center; justify-content:center;",
+                           title = "Número total de fraturas",
+                           h3(textOutput("box1_val"))
+                         ),
+                         
+                         # ── dentro do fluidRow das KPIs (segunda posição) ──────────────────────────
+                         column(
+                           width = 4,
+                           # TÍTULO
+                           div(
+                             style = "
+                              width:100%;
+                              text-align:left;
+                              font-weight:bold;
+                              color:#012340;      /* mesmo azul do donut */
+                              margin-bottom:4px;
+                              ",
+                             "Percentual de Óbitos"
+                           ),
+                           # DONUT
+                           plotOutput("box2_donut", height = "170px", width = "170px")
+                         ),
+                         
+                         
+                         
+                         box(
+                           width = 4, solidHeader = TRUE, status = "primary",
+                           style = "height: 120px; display:flex; align-items:center; justify-content:center;",
+                           title = "Faixa etária mais acometida",
+                           h3(textOutput("box3_val"))
+                         )
+                       ),
+                       ##################################################################
+                       
                        box(
                          width = 12,
                          solidHeader = TRUE,
@@ -214,6 +219,7 @@ ui <- dashboardPage(
                                   style = "height: 473px;",
                                   withSpinner(uiOutput("mapa_setas"))
                            ),
+                           
                            column(width = 6,
                                   style = "height: 473px;",
                                   withSpinner(plotOutput("grafico_2", height = "300px"))
@@ -224,78 +230,15 @@ ui <- dashboardPage(
               )
       ),
       
-      # --- Aba Visualizar Mapa de Hotspots ---
-      tabItem(tabName = "mapa",
-              fluidRow(
-                column(width = 12,
-                       box(
-                         width = 12,
-                         solidHeader = TRUE,
-                         title = "Hot Spots Emergentes (2010–2021)",
-                         div(
-                           style = "height: 100%; display: flex; flex-direction: column; justify-content: space-between;",
-                           withSpinner(imageOutput("hotspot_plot", height = "700px", width = "1000px")),
-                           div(
-                             style = "padding: 15px; font-size: 16px; color: #012340;",
-                             HTML("
-                    <h4>Como interpretar o Mapa de Hotspots:</h4>
-                    <ul>
-                      <li>O mapa utiliza a técnica <b>Space-Time Cube</b> combinada com o índice <b>Getis-Ord Gi*</b> para detectar áreas críticas.</li>
-                      <li><b>Hotspots (áreas em vermelho)</b>: municípios com <b>altas taxas</b> de fratura de fêmur.</li>
-                      <li><b>Coldspots (áreas em azul)</b>: municípios com <b>baixas taxas</b> de fratura de fêmur.</li>
-                      <li><b>Áreas em branco</b>: não apresentam padrão espacial relevante.</li>
-                    </ul>
-                    <h5>Categorias dos padrões detectados:</h5>
-                    <ul>
-                      <li><b>Novo (New Hot Spot)</b>: Área recém-identificada com alta taxa.</li>
-                      <li><b>Persistente (Persistent Hot Spot)</b>: Área que historicamente manteve alta taxa.</li>
-                      <li><b>Intensificando (Intensifying Hot Spot)</b>: Área onde a taxa aumentou recentemente.</li>
-                      <li><b>Diminuição (Diminishing Hot Spot)</b>: Área onde a taxa de fraturas vem caindo.</li>
-                      <li><b>Oscilante, Esporádico ou Histórico</b>: Áreas com comportamento variável ao longo do tempo.</li>
-                    </ul>
-                    <p><i>Nota: A análise combina dados espaciais e temporais, identificando regiões prioritárias para intervenção em saúde pública.</i></p>
-                  ")
-                           )
-                         )
-                       )
-                )
-              )
-      ),
-      tabItem(tabName = "fontes",
-              fluidRow(
-                column(width = 12,
-                       box(
-                         width = 12,
-                         solidHeader = TRUE,
-                         title = "Fontes dos Dados",
-                         status = "primary",
-                         div(style = "font-size:16px; padding: 10px;",
-                             HTML("
-            <p><b>Fonte dos dados:</b></p>
-            <ul>
-              <li><b>DATASUS</b> – Departamento de Informática do SUS</li>
-              <li><b>IBGE</b> – Instituto Brasileiro de Geografia e Estatística</li>
-              
-              <li><b>Ministério da Saúde</b> – Dados públicos de saúde</li>
-            </ul>
-            <p>----------------- 2025</p>
-          ")
-                         )
-                       )
-                )
-              )
-      ),
-      
-      
       # --- Aba Relatório ---
-      # Na aba "Relatório" do UI
       tabItem(tabName = "relatorio",
               fluidRow(
                 column(width = 6,
                        selectInput("relatorio_municipio", "Município:",
                                    choices = c("Paraná", unique(shape_pr$NM_MUN)),
                                    selected = "Paraná")
-                )
+                ),
+    
               ),
               fluidRow(
                 column(width = 12,
@@ -312,25 +255,140 @@ ui <- dashboardPage(
                        box(
                          width = 12,
                          solidHeader = TRUE,
-                         title = "Mapa do Município Selecionado",
-                         leafletOutput("mapa_municipio")
+                         title = "Evolução Anual dos Indicadores (2010–2021)",
+                         withSpinner(plotOutput("grafico_relatorio", height = "400px"))
                        )
                 )
-              )
+              ),
       )
-      
-      
     )
   )
-  
 )
-
 
 
 # === SERVER
 server <- function(input, output, session) {
   municipio_selecionado <- reactiveVal(NULL)
   
+  # ——— 1. Pré-processamento de fluxos incluindo ANO_CMPT ———
+  # ——— Pré-processamento de fluxos incluindo todas as transferências ———
+  dados <- readr::read_csv("BANCO_FINAL_AIHs_CLASSIFICADAS(1).csv", col_types = readr::cols())
+  
+  # 1) filtra apenas casos classificados como transferência interna ("E") ou externa ("UE")
+  dados_transf <- dados %>%
+    dplyr::filter(COD_ID %in% c("E", "UE"))
+  
+  # 2) separa múltiplos destinos, mantendo também os simples
+  dados_long <- dados_transf %>%
+    tidyr::separate_rows(MUNIC_MOV, sep = ",") %>%
+    dplyr::mutate(
+      MUNIC_MOV = stringr::str_trim(as.character(MUNIC_MOV)),
+      MUNIC_RES = as.character(MUNIC_RES)
+    )
+  
+  # 3) agrega número de transferências por ano, origem e destino
+  fluxos_ag <- dados_long %>%
+    dplyr::group_by(ANO_CMPT, MUNIC_RES, MUNIC_MOV) %>%
+    dplyr::summarise(count = dplyr::n(), .groups = "drop")
+  
+  # 4) calcula centróides dos municípios
+  centroids <- shape_pr %>%
+    sf::st_centroid() %>%
+    dplyr::mutate(code = CD_MUN_6) %>%
+    sf::st_coordinates() %>%
+    as.data.frame() %>%
+    dplyr::bind_cols(code = shape_pr$CD_MUN_6) %>%
+    dplyr::rename(lon = X, lat = Y)
+  
+  # 5) junta coordenadas de origem e destino
+  fluxos_coords <- fluxos_ag %>%
+    dplyr::left_join(centroids, by = c("MUNIC_RES" = "code")) %>%
+    dplyr::rename(orig_lon = lon, orig_lat = lat) %>%
+    dplyr::left_join(centroids, by = c("MUNIC_MOV" = "code")) %>%
+    dplyr::rename(dest_lon = lon, dest_lat = lat) %>%
+    dplyr::filter(!is.na(orig_lon) & !is.na(dest_lon))
+  
+  # 6) normaliza espessura (1 a 5)
+  min_c <- min(fluxos_coords$count); max_c <- max(fluxos_coords$count)
+  fluxos_coords <- fluxos_coords %>%
+    dplyr::mutate(weight = if (min_c == max_c) 3 else 1 + (count - min_c)/(max_c - min_c)*4)
+  
+  # 7) constrói geometria LINESTRING e gera o sf final
+  linhas <- lapply(seq_len(nrow(fluxos_coords)), function(i) {
+    sf::st_linestring(matrix(
+      c(fluxos_coords$orig_lon[i], fluxos_coords$orig_lat[i],
+        fluxos_coords$dest_lon[i], fluxos_coords$dest_lat[i]),
+      ncol = 2, byrow = TRUE
+    ))
+  })
+  fluxos_sf <- sf::st_sf(fluxos_coords, geometry = sf::st_sfc(linhas, crs = 4326))
+  
+  
+  
+  # ——— 2. Reactive para filtrar por ano e município ———
+  fluxos_filtrados <- reactive({
+    df <- fluxos_sf
+    
+    # filtrar por ano se não for "Todos"
+    if (input$ano_grafico1 != "Todos") {
+      ano_sel <- as.numeric(input$ano_grafico1)
+      df <- df %>% dplyr::filter(ANO_CMPT == ano_sel)
+    }
+    # filtrar saídas do município selecionado
+    if (!is.null(municipio_selecionado())) {
+      df <- df %>% dplyr::filter(MUNIC_RES == municipio_selecionado())
+    }
+    df
+  })
+  
+  
+  # ——— 3. Renderizar mapa com fluxos filtrados ———
+  output$leaflet_mapa <- renderLeaflet({
+    mapa <- leaflet(options = leafletOptions(minZoom = 6, maxZoom = 12)) %>%
+      addProviderTiles("CartoDB.Positron") %>%
+      # todos em cinza, não clicáveis
+      addPolygons(
+        data        = shape_pr,
+        fillColor   = "#DDDDDD",
+        color       = "#FFFFFF",
+        weight      = 0.5,
+        fillOpacity = 0.8,
+        options     = pathOptions(clickable = FALSE)
+      )
+    
+    # destacar e dar zoom no município selecionado
+    if (!is.null(municipio_selecionado())) {
+      muni_sel <- shape_pr %>% filter(CD_MUN_6 == municipio_selecionado())
+      centro   <- st_coordinates(st_centroid(muni_sel))
+      mapa <- mapa %>%
+        addPolygons(
+          data        = muni_sel,
+          fillColor   = "#025959",
+          color       = "#000000",
+          weight      = 2,
+          fillOpacity = 0.6,
+          highlight   = highlightOptions(
+            weight      = 3,
+            color       = "#333",
+            fillOpacity = 0.7,
+            bringToFront= TRUE
+          )
+        ) %>%
+        setView(lng = centro[1], lat = centro[2], zoom = 10)
+    }
+    
+    # adicionar as linhas de fluxo filtradas
+    mapa %>%
+      addPolylines(
+        data      = fluxos_filtrados(),
+        weight    = ~weight,
+        color     = "blue",
+        opacity   = 0.6,
+        dashArray = "5,5",
+        group     = "fluxos"
+      )
+  })
+
   observeEvent(input$mapa_dinamico_shape_click, {
     cod_mun <- substr(input$mapa_dinamico_shape_click$id, 1, 6)
     municipio_selecionado(cod_mun)
@@ -377,42 +435,22 @@ server <- function(input, output, session) {
   })
   
   output$mapa_dinamico <- renderLeaflet({
-    library(geobr)
-    
-    estados_brasil <- read_state(year = 2020)
-    parana_estado <- estados_brasil %>% filter(abbrev_state == "PR")
-    vizinhos_estado <- estados_brasil %>% filter(abbrev_state != "PR")
-    
     if (is.null(municipio_selecionado())) {
-      leaflet(options = leafletOptions(minZoom = 6, maxZoom = 9)) %>%
+      leaflet(data = shape_pr, options = leafletOptions(minZoom = 6, maxZoom = 9)) %>%
         addProviderTiles("CartoDB.Positron") %>%
-        
-        # Estados vizinhos (bordas finas e cinza claro)
-        addPolygons(data = vizinhos_estado,
-                    fillColor = "#d9d9d9",
-                    color = "#bdbdbd",
-                    weight = 1,
-                    fillOpacity = 0.3,
-                    label = ~name_state) %>%
-        
-        # Paraná com borda preta sólida e espessa
-        addPolygons(data = parana_estado,
-                    fillColor = "#FFFFFF00",  # transparente
-                    color = "black",         # borda preta
-                    weight = 4,              # espessura
-                    opacity = 1,
-                    fillOpacity = 0,         # sem preenchimento
-                    label = "Paraná") %>%
-        
-        # Municípios do PR
-        addPolygons(data = shape_pr,
-                    fillColor = "#025959", weight = 1, opacity = 1, color = "white",
-                    dashArray = "3", fillOpacity = 0.7,
-                    highlight = highlightOptions(weight = 2, color = "#666", fillOpacity = 0.9, bringToFront = TRUE),
-                    label = ~NM_MUN, layerId = ~CD_MUN,
-                    labelOptions = labelOptions(style = list("font-weight" = "normal"), textsize = "13px")) %>%
-        
-        setMaxBounds(lng1 = -55.5, lat1 = -27.7, lng2 = -48.0, lat2 = -22.5)
+        setMaxBounds(
+          lng1 = -55.5, lat1 = -27.7,
+          lng2 = -48.0, lat2 = -22.5
+        ) %>%
+        addPolygons(
+          fillColor = "#025959", weight = 1, opacity = 1, color = "white",
+          dashArray = "3", fillOpacity = 0.7,
+          highlight = highlightOptions(weight = 2, color = "#666", fillOpacity = 0.9, bringToFront = TRUE),
+          label = ~NM_MUN, layerId = ~CD_MUN,
+          labelOptions = labelOptions(style = list("font-weight" = "normal"), textsize = "13px")
+        )
+      
+      
     } else {
       muni <- shape_pr %>% filter(CD_MUN_6 == municipio_selecionado())
       leaflet(data = muni) %>%
@@ -422,7 +460,6 @@ server <- function(input, output, session) {
                 lat = st_coordinates(st_centroid(st_geometry(muni)))[2], zoom = 10)
     }
   })
-  
   
   output$hotspot_plot <- renderImage({
     list(
@@ -530,6 +567,108 @@ server <- function(input, output, session) {
       group_by(FaixaEtaria, Grupo) %>%
       summarise(total_casos = n(), .groups = "drop")
     
+    output$box1_val <- renderText({
+  
+      df <- read.csv("BANCO_FINAL_AIHs_CLASSIFICADAS(1).csv", encoding = "latin1")
+      
+      # filtro de ano
+      if (input$ano_grafico1 != "Todos") {
+        df <- dplyr::filter(df, ANO_CMPT == as.numeric(input$ano_grafico1))
+      }
+      
+      # filtro de município
+      if (!is.null(municipio_selecionado())) {
+        df <- dplyr::filter(df, MUNIC_RES == as.numeric(municipio_selecionado()))
+      }
+      
+      # retorna o total formatado
+      format(nrow(df), big.mark = ".")
+    })
+    
+    # ---------------------------------------------------------------------------
+    #  SEGUNDA “BOX” – Donut com a porcentagem de óbitos no centro
+    # ---------------------------------------------------------------------------
+    output$box2_donut <- renderPlot({
+      
+      ## --- filtros (mesmo código) ---
+      df <- read.csv("BANCO_FINAL_AIHs_CLASSIFICADAS(1).csv", encoding = "latin1")
+      if (input$ano_grafico1 != "Todos") {
+        df <- subset(df, ANO_CMPT == as.numeric(input$ano_grafico1))
+      }
+      if (!is.null(municipio_selecionado())) {
+        df <- subset(df, MUNIC_RES == as.numeric(municipio_selecionado()))
+      }
+      
+      total_fraturas <- nrow(df)
+      total_obitos   <- sum(df$MORTE == "OBITO", na.rm = TRUE)
+      
+      if (total_fraturas == 0) {
+        grid::grid.newpage()
+        grid::grid.text("0%", gp = grid::gpar(fontsize = 16, fontface = "bold"))
+        return()
+      }
+      
+      perc_obitos <- total_obitos / total_fraturas * 100
+      
+      ## --- donut (mesmo código) ---
+      donut_df <- data.frame(
+        grupo = factor(c("Óbitos", "Demais"), levels = c("Óbitos", "Demais")),
+        valor = c(total_obitos, total_fraturas - total_obitos)
+      )
+      
+      g <- ggplot2::ggplot(donut_df, aes(x = 2, y = valor, fill = grupo)) +
+        ggplot2::geom_col(width = 1, colour = NA) +
+        ggplot2::coord_polar(theta = "y") +
+        ggplot2::xlim(0.5, 2.5) +
+        ggplot2::scale_fill_manual(values = c("Óbitos" = "#F6A31B",
+                                              "Demais" = "#012340")) +
+        ggplot2::theme_void() +
+        ggplot2::theme(legend.position = "none")
+      
+      print(g)   # desenha o donut
+      
+      ## --- texto central: SOMENTE a porcentagem ---
+      grid::grid.text(
+        sprintf("%.1f%%", round(perc_obitos, 1)),   # ex.: "12.3%"
+        x = 0.5, y = 0.5,
+        gp = grid::gpar(fontsize = 16, fontface = "bold", col = "#012340")
+      )
+    }, bg = "transparent")
+    
+    
+    
+    output$box3_val <- renderText({
+      df <- read.csv("BANCO_FINAL_AIHs_CLASSIFICADAS(1).csv", encoding = "latin1")
+      
+      # filtro pelo ano selecionado
+      if (input$ano_grafico1 != "Todos") {
+        df <- subset(df, ANO_CMPT == as.numeric(input$ano_grafico1))
+      }
+      
+      # filtro pelo município selecionado (se houver)
+      if (!is.null(municipio_selecionado())) {
+        df <- subset(df, MUNIC_RES == as.numeric(municipio_selecionado()))
+      }
+      
+      # cria a variável FaixaEtaria
+      df$FaixaEtaria <- with(df, ifelse(IDADE >= 60 & IDADE <= 69, "60-69",
+                                        ifelse(IDADE >= 70 & IDADE <= 79, "70-79",
+                                               ifelse(IDADE >= 80 & IDADE <= 89, "80-89",
+                                                      ifelse(IDADE >= 90,              "90+",  NA)))))
+      
+      # remove linhas fora das faixas
+      df <- subset(df, !is.na(FaixaEtaria))
+      
+      if (nrow(df) == 0) return("Sem dados")
+      
+      # conta e pega a faixa com maior frequência
+      tab <- sort(table(df$FaixaEtaria), decreasing = TRUE)
+      faixa_max <- names(tab)[1]
+      total_max <- as.integer(tab[1])
+      
+      paste0(faixa_max, " (", format(total_max, big.mark = "."), ")")
+    })
+    
     # Total de óbitos por grupo
     obitos_por_grupo <- df %>%
       filter(MORTE == "OBITO") %>%
@@ -546,7 +685,7 @@ server <- function(input, output, session) {
     ggplot(dados_plot, aes(x = FaixaEtaria, y = pct, fill = Grupo)) +
       geom_col(position = position_dodge()) +
       geom_text(
-        aes(label = obitos),  # <<<<< Mostrando o valor absoluto de óbitos
+        aes(label = obitos), 
         position = position_dodge(width = 0.9),
         vjust = -0.5,
         size = 3.5
@@ -672,25 +811,23 @@ server <- function(input, output, session) {
         text = element_text(color = "#012340", size = 13)
       )
   })
+  
+  
+  
   output$mapa_setas <- renderUI({
     df <- read.csv("BANCO_FINAL_AIHs_CLASSIFICADAS(1).csv", encoding = "latin1")
     df$ANO_CMPT <- as.numeric(df$ANO_CMPT)
     
-    # Filtrar pelo ano selecionado
     if (input$ano_grafico1 != "Todos") {
       df <- df %>% filter(ANO_CMPT == as.numeric(input$ano_grafico1))
     }
     
-    # Filtrar somente as transferências externas (UE)
     df <- df %>% filter(COD_ID == "UE")
     
-    # Filtrar apenas as transferências originadas do município selecionado
     if (!is.null(municipio_selecionado())) {
-      mun_sel <- as.numeric(municipio_selecionado())
-      df <- df %>% filter(MUNIC_RES == mun_sel)  # Só manter transferências que começam no município selecionado
+      df <- df %>% filter(MUNIC_RES == as.numeric(municipio_selecionado()))
     }
     
-    # Se não houver transferências, mostrar mensagem
     if (nrow(df) == 0) {
       return(div(
         style = "height:300px; display:flex; align-items:center; justify-content:right; font-size:16px; font-weight:bold;color:#000000",
@@ -698,110 +835,12 @@ server <- function(input, output, session) {
       ))
     }
     
-    # Gerar o mapa interativo
-    output$leaflet_mapa <- renderLeaflet({
-      # Coordenadas dos municípios
-      coord_muni <- shape_pr %>%
-        st_centroid() %>%
-        st_coordinates() %>%
-        as.data.frame() %>%
-        bind_cols(st_drop_geometry(shape_pr) %>% select(CD_MUN_6)) %>%
-        rename(lon = X, lat = Y)
-      
-      # Se nenhum município estiver selecionado
-      if (is.null(municipio_selecionado())) {
-        return(
-          leaflet() %>%
-            addProviderTiles("CartoDB.Positron")
-        )
-      }
-      
-      # Converte códigos
-      df$MUNIC_RES <- as.character(df$MUNIC_RES)
-      df$MUNIC_MOV <- as.character(df$MUNIC_MOV)
-      mun_sel <- as.character(municipio_selecionado())
-      
-      # Coordenada da origem (município selecionado)
-      origem_coord <- coord_muni %>%
-        filter(CD_MUN_6 == mun_sel) %>%
-        select(lon_orig = lon, lat_orig = lat)
-      
-      # Se a coordenada do município não foi encontrada
-      if (nrow(origem_coord) == 0) {
-        return(
-          leaflet() %>%
-            addProviderTiles("CartoDB.Positron")
-        )
-      }
-      
-      # Filtra apenas transferências partindo DO município selecionado
-      df_coords <- df %>%
-        filter(COD_ID == "UE", MUNIC_RES == mun_sel) %>%
-        distinct(MUNIC_MOV) %>%
-        left_join(coord_muni, by = c("MUNIC_MOV" = "CD_MUN_6")) %>%
-        rename(lon_dest = lon, lat_dest = lat) %>%
-        mutate(
-          lon_orig = origem_coord$lon_orig[1],
-          lat_orig = origem_coord$lat_orig[1]
-        ) %>%
-        filter(!is.na(lat_dest), !is.na(lon_dest))
-      
-      # Desenha o mapa
-      leaflet() %>%
-        addProviderTiles("CartoDB.Positron") %>%
-        addPolylines(
-          data = df_coords,
-          lng = ~c(lon_orig, lon_dest),
-          lat = ~c(lat_orig, lat_dest),
-          color = "blue",
-          weight = 2,
-          opacity = 0.8
-        )
-    })
-    
     leafletOutput("leaflet_mapa", height = "473px")
   })
   
-  # No servidor
-  output$mapa_municipio <- renderLeaflet({
-    municipio <- input$relatorio_municipio  # Obter o município selecionado
-    
-    # Filtra os dados do município
-    municipio_data <- shape_pr %>% filter(NM_MUN == municipio)
-    
-    # Verificar se o filtro encontrou dados
-    print(municipio_data)  # Adicione esta linha para depuração
-    
-    # Se não encontrar dados
-    if (nrow(municipio_data) == 0) {
-      return(leaflet() %>% addTiles())  # Retorna um mapa em branco se nenhum município for encontrado
-    }
-    
-    # Criar o mapa
-    mapa <- leaflet(municipio_data) %>%
-      addTiles() %>%
-      addPolygons(
-        fillColor = "blue", 
-        weight = 1, 
-        color = "white", 
-        opacity = 0.5, 
-        fillOpacity = 0.7,
-        label = ~NM_MUN  # Rótulo com o nome do município
-      ) %>%
-      setView(
-        lng = st_centroid(municipio_data)$coords[1], 
-        lat = st_centroid(municipio_data)$coords[2], 
-        zoom = 10  # Ajuste o zoom conforme necessário
-      )
-    
-    return(mapa)
-  })
-  
-  
-  
   output$relatorio_completo <- renderUI({
     df_fraturas <- read.csv("BANCO_FINAL_AIHs_CLASSIFICADAS(1).csv", encoding = "latin1")
-    dados_indicadores <- read.csv("dados_indicadores_corrigido.csv", encoding = "latin1")
+    dados_indicadores <- read.csv("gwrt.csv", encoding = "latin1")
     
     if (input$relatorio_municipio != "Paraná") {
       cd_mun <- shape_pr %>%
@@ -829,21 +868,15 @@ server <- function(input, output, session) {
     }
     
     plano <- if (input$relatorio_municipio == "Paraná") {
-      mean(dados_indicadores$tx_cob_plano, na.rm = TRUE) 
+      mean(dados_indicadores$`tpi`, na.rm = TRUE) * 100
     } else {
-      indicadores_filtrados$tx_cob_plano[1]
+      indicadores_filtrados$`tpi`[1] * 100
     }
     
-    alf_5564 <- if (input$relatorio_municipio == "Paraná") {
-      mean(dados_indicadores$`tx_alf_5564`, na.rm = TRUE) * 100
+    alf <- if (input$relatorio_municipio == "Paraná") {
+      mean(dados_indicadores$`txalfabet_2022`, na.rm = TRUE) * 100
     } else {
-      indicadores_filtrados$`tx_alf_5564`[1] * 100
-    }
-    
-    alf_65 <- if (input$relatorio_municipio == "Paraná") {
-      mean(dados_indicadores$`tx_alf_ac65`, na.rm = TRUE) * 100
-    } else {
-      indicadores_filtrados$`tx_alf_ac65`[1] * 100
+      indicadores_filtrados$`txalfabet_2022`[1] * 100
     }
     
     trata_na <- function(x) {
@@ -862,12 +895,142 @@ server <- function(input, output, session) {
       "<li><b>Densitometria (APAC/10.000 hab):</b> ", trata_na(densito), "</li>",
       "<li><b>Cobertura da ESF (%):</b> ", trata_na(esf), "</li>",
       "<li><b>Plano de Saúde (%):</b> ", trata_na(plano), "</li>",
-      "<li><b>Alfabetização (55–64 anos) (%):</b> ", trata_na(alf_5564), "</li>",
-      "<li><b>Alfabetização (65+ anos) (%):</b> ", trata_na(alf_65), "</li>",
+      "<li><b>Alfabetização (%):</b> ", trata_na(alf), "</li>",
       "</ul>"
     ))
   })
   
+  
+  output$grafico_relatorio <- renderPlot({
+    # Leitura dos dados com tratamento de erros
+    fraturas <- tryCatch({
+      df <- read.csv("BANCO_FINAL_AIHs_CLASSIFICADAS(1).csv", encoding = "latin1") %>% 
+        mutate(MUNIC_RES = as.character(MUNIC_RES))
+      if(!all(c("MUNIC_RES", "ANO_CMPT") %in% colnames(df))) stop("Colunas obrigatórias faltando")
+      df
+    }, error = function(e) {
+      showNotification(paste("Erro nas fraturas:", e$message), type = "error")
+      NULL
+    })
+    
+    indicadores <- tryCatch({
+      read.csv("tabela_STC_txDensito10k_PR_2010_21_ac60anos.csv", encoding = "latin1") %>% 
+        mutate(MUNIC_RES = as.character(MUNIC_RES))
+    }, error = function(e) {
+      showNotification(paste("Erro nos indicadores:", e$message), type = "error")
+      NULL
+    })
+    
+    if(is.null(fraturas) || is.null(indicadores)) {
+      return(
+        ggplot() + 
+          annotate("text", x=1, y=1, label="Dados indisponíveis", size=6) + 
+          theme_void()
+      )
+    }
+    
+    # Obter código do município se não for "Paraná"
+    if(input$relatorio_municipio != "Paraná") {
+      cod_mun <- shape_pr %>% 
+        filter(NM_MUN == input$relatorio_municipio) %>% 
+        pull(CD_MUN_6) %>% 
+        as.character()
+      
+      if(length(cod_mun) == 0) {
+        return(
+          ggplot() + 
+            annotate("text", x=1, y=1, label="Município não encontrado", size=6) + 
+            theme_void()
+        )
+      }
+    }
+    
+    # Processamento dos dados - CONTAGEM DIRETA SEM AJUSTES
+    dados_fraturas <- if(input$relatorio_municipio == "Paraná") {
+      fraturas %>% 
+        filter(!is.na(ANO_CMPT)) %>%  # Filtra anos válidos
+        group_by(ANO_CMPT) %>% 
+        summarise(fraturas = n(), .groups = "drop")  # Contagem simples
+    } else {
+      fraturas %>% 
+        filter(MUNIC_RES == cod_mun, !is.na(ANO_CMPT)) %>% 
+        group_by(ANO_CMPT) %>% 
+        summarise(fraturas = n(), .groups = "drop")
+    }
+    
+    # Processamento dos indicadores (população e densitometrias)
+    dados_indicadores <- if(input$relatorio_municipio == "Paraná") {
+      indicadores %>% 
+        group_by(ANO_CMPT) %>% 
+        summarise(
+          pop_idosa = sum(pop_ac60, na.rm = TRUE)/1000,  # Já dividido por 1000
+          densitometria = sum(n_densito, na.rm = TRUE),
+          .groups = "drop"
+        )
+    } else {
+      indicadores %>% 
+        filter(MUNIC_RES == cod_mun) %>% 
+        select(ANO_CMPT, pop_idosa = pop_ac60, densitometria = n_densito) %>% 
+        mutate(pop_idosa = pop_idosa/1000)  # Dividido por 1000
+    }
+    
+    # Junção dos dados
+    dados_completos <- full_join(dados_fraturas, dados_indicadores, by = "ANO_CMPT") %>% 
+      replace_na(list(fraturas = 0, densitometria = 0, pop_idosa = 0)) %>% 
+      arrange(ANO_CMPT)
+    
+    # Verificação final dos dados
+    if(nrow(dados_completos) == 0 || all(dados_completos$fraturas == 0)) {
+      return(
+        ggplot() + 
+          annotate("text", x=1, y=1, label="Nenhum dado disponível", size=6) + 
+          theme_void()
+      )
+    }
+    
+    # Transformação para formato longo
+    dados_long <- dados_completos %>% 
+      pivot_longer(
+        cols = -ANO_CMPT,
+        names_to = "variavel",
+        values_to = "valor"
+      ) %>% 
+      mutate(
+        variavel = factor(
+          variavel,
+          levels = c("pop_idosa", "fraturas", "densitometria"),
+          labels = c("População ≥60 anos (milhares)", "Fraturas de Fêmur", "Densitometrias")
+        )
+      )
+    
+    # Criação do gráfico
+    ggplot(dados_long, aes(x = ANO_CMPT, y = valor, color = variavel)) +
+      geom_line(size = 1.2) +
+      geom_point(size = 3) +
+      scale_color_manual(
+        values = c(
+          "População ≥60 anos (milhares)" = "#012340",
+          "Fraturas de Fêmur" = "#014F86",
+          "Densitometrias" = "#027373"
+        )
+      ) +
+      scale_x_continuous(breaks = 2010:2021) +
+      scale_y_continuous(
+        labels = scales::comma_format(big.mark = ".", decimal.mark = ","),
+        limits = c(0, max(dados_long$valor, na.rm = TRUE) * 1.1)
+      ) +
+      labs(
+        x = "Ano",
+        color = "Indicador",
+        title = paste(input$relatorio_municipio),
+      ) +
+      theme_minimal(base_size = 14) +
+      theme(
+        legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        panel.grid.minor = element_blank()
+      )
+  })
   
 }
 

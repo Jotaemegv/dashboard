@@ -110,7 +110,7 @@ ui <- dashboardPage(
                          width = 12,
                          solidHeader = TRUE,
                          title = textOutput("map_title"),
-                         style = "height: 300px;",
+                         style = "height: 400px;",
                          div(
                            style = "height: 100%; display: flex; flex-direction: column; justify-content: space-between;",
                            
@@ -144,17 +144,15 @@ ui <- dashboardPage(
                          width = 12,
                          solidHeader = TRUE,
                          title = "Incidência por Faixa Etária e Sexo",
-                         style = "height: 500px;",
+                         style = "height: 420px; padding-bottom: 0;",
                          div(
-                           style = "height: 100%; display: flex; flex-direction: column; justify-content: space-between;",
-                           
-                           # (Seletor de ano REMOVIDO)
-                           
+                           style = "height: 100%; display: flex; flex-direction: column; justify-content: flex-start;",
                            withSpinner(
-                             plotOutput("grafico_1", height = "380px")
+                             plotOutput("grafico_1", height = "400px")
                            )
                          )
                        )
+                       
                 ),
                 
                 column(width = 6,
@@ -164,38 +162,71 @@ ui <- dashboardPage(
                        ##################################################################
                        fluidRow(
                          box(
-                           width = 4, solidHeader = TRUE, status = "primary",
-                           style = "height: 120px; display:flex; align-items:center; justify-content:center;",
+                           width = 4,
                            title = "Número total de fraturas",
-                           h3(textOutput("box1_val"))
-                         ),
+                           status = NULL,
+                           solidHeader = FALSE,
+                           background = NULL,
+                           collapsible = FALSE,
+                           style = "border:none; box-shadow:none; padding-top: 5px; padding-bottom: 5px;",  # padding vertical
+                           
+                           div(
+                             style = "height: 100px; display: flex; justify-content: center; align-items: center; color: #F6A31B; font-size: 40px; font-weight: bold; margin: 5px 0;",
+                             textOutput("box1_val")
+                           )
+                         )
+                         
+                         
+                         
+                         ,
                          
                          # ── dentro do fluidRow das KPIs (segunda posição) ──────────────────────────
-                         column(
-                           width = 4,
-                           # TÍTULO
-                           div(
-                             style = "
-                              width:100%;
-                              text-align:left;
-                              font-weight:bold;
-                              color:#012340;      /* mesmo azul do donut */
-                              margin-bottom:4px;
-                              ",
-                             "Percentual de Óbitos"
-                           ),
-                           # DONUT
-                           plotOutput("box2_donut", height = "170px", width = "170px")
-                         ),
-                         
-                         
-                         
                          box(
-                           width = 4, solidHeader = TRUE, status = "primary",
-                           style = "height: 120px; display:flex; align-items:center; justify-content:center;",
-                           title = "Faixa etária mais acometida",
-                           h3(textOutput("box3_val"))
+                           width = 4,
+                           title = "Percentual de Óbitos",
+                           solidHeader = FALSE,
+                           status = NULL,
+                           background = NULL,
+                           collapsible = FALSE,
+                           style = "border:none; box-shadow:none; padding-top: 8px; height: 120px;",
+                           
+                           div(
+                             style = "height: 100%; display: flex; justify-content: center; align-items: center; margin: 0; padding: 0;",
+                             plotOutput("box2_donut", height = "120px", width = "120px")
+                           )
                          )
+                         ,
+                         box(
+                           width = 4,
+                           title = tags$div(
+                             "Faixa etária mais acometida",
+                             style = "
+      width: 180px;       /* aumenta largura para caber 2 linhas */
+      margin: 0 auto;     /* centraliza */
+      line-height: 1.1;   /* compacta linhas */
+      font-weight: bold;
+      font-size: 16px;
+      white-space: normal; /* força quebra */
+      overflow-wrap: break-word;
+    "
+                           ),
+                           solidHeader = FALSE,
+                           status = NULL,
+                           background = NULL,
+                           collapsible = FALSE,
+                           style = "border:none; box-shadow:none; padding-top: 8px; height: 120px;",
+                           
+                           div(
+                             style = "height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; margin: 0; padding: 0;",
+                             
+                             div(
+                               style = "color: #F6A31B; font-weight: bold; font-size: 30px; text-align: center;",
+                               textOutput("box3_val")
+                             )
+                           )
+                         )
+                         
+                         
                        ),
                        ##################################################################
                        
@@ -203,10 +234,10 @@ ui <- dashboardPage(
                          width = 12,
                          solidHeader = TRUE,
                          title = "Óbitos por Faixa Etária, Sexo e Tratamento",
-                         style = "height: 300px;",
+                         style = "height: 350px;",
                          div(
                            style = "height: 100%; display: flex; flex-direction: column; justify-content: center;",
-                           withSpinner(plotOutput("grafico_direita", height = "250px"))
+                           withSpinner(plotOutput("grafico_direita", height = "340px"))
                          )
                        ),
                        box(
@@ -508,18 +539,29 @@ server <- function(input, output, session) {
         aes(label = total),
         position = position_dodge(width = 0.9),
         vjust = -0.5,
-        size = 4
+        size = 5,
+        color = "#F6A31B",
+        fontface = "bold"
       ) +
       scale_fill_manual(values = c("Feminino" = "#027373", "Masculino" = "#025959")) +
       labs(
         title = ifelse(input$ano_grafico1 == "Todos",
-                       "Fraturas de Fêmur por Faixa Etária e Sexo - Todos os anos",
+                       "",
                        paste("Fraturas de Fêmur por Faixa Etária e Sexo -", input$ano_grafico1)),
         x = "Faixa Etária", y = "Número de Fraturas",
         fill = "Sexo"
       ) +
-      theme_minimal()
+      theme_minimal() +
+      theme(
+        axis.text = element_text(size = 14, color = "black"),
+        axis.title = element_text(size = 16, color = "black"),
+        legend.text = element_text(size = 14, color = "black"),
+        legend.title = element_text(size = 16, color = "black"),
+        plot.title = element_text(size = 18, color = "black")
+      )
   })
+  
+  
   
   output$grafico_direita <- renderPlot({
     df <- read.csv("BANCO_FINAL_AIHs_CLASSIFICADAS(1).csv", encoding = "latin1")
@@ -560,6 +602,8 @@ server <- function(input, output, session) {
           Sexo == "♀" & Operado ~ "Óbito ♀ Operadas",
           Sexo == "♀" & !Operado ~ "Óbito ♀ Não Operadas"
         )
+        
+        
       )
     
     # Total de pacientes internados por grupo
@@ -629,10 +673,12 @@ server <- function(input, output, session) {
       
       ## --- texto central: SOMENTE a porcentagem ---
       grid::grid.text(
-        sprintf("%.1f%%", round(perc_obitos, 1)),   # ex.: "12.3%"
+        sprintf("%.1f%%", round(perc_obitos, 1)),
         x = 0.5, y = 0.5,
-        gp = grid::gpar(fontsize = 16, fontface = "bold", col = "#012340")
+        gp = grid::gpar(fontsize = 20, fontface = "bold", col = "#F6A31B")
       )
+      
+      
     }, bg = "transparent")
     
     
@@ -688,7 +734,9 @@ server <- function(input, output, session) {
         aes(label = obitos), 
         position = position_dodge(width = 0.9),
         vjust = -0.5,
-        size = 3.5
+        size = 4,
+        fontface = "bold",
+        color = "#F6A31B"  # Laranja
       ) +
       scale_fill_manual(values = c(
         "Óbito ♂ Operados" = "#027373",
@@ -696,12 +744,18 @@ server <- function(input, output, session) {
         "Óbito ♀ Operadas" = "#014F86",
         "Óbito ♀ Não Operadas" = "#A9CCE3"
       )) +
-      labs(
-        title = "Desfecho de fraturas de fêmur por faixa etária e sexo",
-        x = "Faixa Etária", y = "% de Óbitos",
-        fill = "Grupo"
+      theme_minimal() +
+      theme(
+        legend.position = "bottom",         # legenda embaixo
+        legend.direction = "horizontal",    # legenda horizontal
+        legend.title = element_text(size = 14, face = "bold"),
+        legend.text = element_text(size = 13, face = "bold", color = "black"),
+        legend.background = element_blank(),
+        legend.key = element_blank(),
+        legend.box = "wrap"                  # permite que a legenda quebre em mais de uma linha
       ) +
-      theme_minimal()
+      guides(fill = guide_legend(nrow = 2, byrow = TRUE))  # força 2 linhas na legenda
+    
   })
   
   

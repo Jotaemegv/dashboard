@@ -282,13 +282,48 @@ ui <- dashboardPage(
                 )
               ),
               fluidRow(
-                column(width = 12,
-                       box(
-                         width = 12,
-                         solidHeader = TRUE,
-                         title = "Evolução Anual dos Indicadores (2010–2021)",
-                         withSpinner(plotOutput("grafico_relatorio", height = "400px"))
-                       )
+                column(
+                  width = 12,
+                  
+                  # População idosa × Fraturas
+                  box(
+                    width = 12, solidHeader = TRUE,
+                    title = "População ≥60 anos e Fraturas de Fêmur (2010–2021)",
+                    withSpinner(plotOutput("grafico_pop_fraturas", height = "350px"))
+                  ),
+                  
+                  # Densitometrias
+                  box(
+                    width = 12, solidHeader = TRUE,
+                    title = "Densitometrias (2010–2021)",
+                    withSpinner(plotOutput("grafico_densito", height = "350px"))
+                  )
+                )
+              ),
+              fluidRow(
+                box(
+                  width  = 3, solidHeader = TRUE, status = "primary",
+                  title  = "Densitometria (APAC/10 mil hab)",
+                  style  = "height:120px; display:flex; align-items:center; justify-content:center;",
+                  h3(textOutput("box_densito"))
+                ),
+                box(
+                  width  = 3, solidHeader = TRUE, status = "primary",
+                  title  = "Cobertura ESF (%)",
+                  style  = "height:120px; display:flex; align-items:center; justify-content:center;",
+                  h3(textOutput("box_esf"))
+                ),
+                box(
+                  width  = 3, solidHeader = TRUE, status = "primary",
+                  title  = "Plano de Saúde (%)",
+                  style  = "height:120px; display:flex; align-items:center; justify-content:center;",
+                  h3(textOutput("box_plano"))
+                ),
+                box(
+                  width  = 3, solidHeader = TRUE, status = "primary",
+                  title  = "Alfabetização (%)",
+                  style  = "height:120px; display:flex; align-items:center; justify-content:center;",
+                  h3(textOutput("box_alf"))
                 )
               ),
       )
@@ -909,182 +944,145 @@ server <- function(input, output, session) {
     
     total_quedas <- nrow(df_fraturas)
     
-    densito <- if (input$relatorio_municipio == "Paraná") {
-      mean(dados_indicadores$tx_apac_densito10k, na.rm = TRUE)
-    } else {
-      indicadores_filtrados$tx_apac_densito10k[1]
-    }
-    
-    esf <- if (input$relatorio_municipio == "Paraná") {
-      mean(dados_indicadores$cob_esf, na.rm = TRUE) * 100
-    } else {
-      indicadores_filtrados$cob_esf[1] * 100
-    }
-    
-    plano <- if (input$relatorio_municipio == "Paraná") {
-      mean(dados_indicadores$`tpi`, na.rm = TRUE) * 100
-    } else {
-      indicadores_filtrados$`tpi`[1] * 100
-    }
-    
-    alf <- if (input$relatorio_municipio == "Paraná") {
-      mean(dados_indicadores$`txalfabet_2022`, na.rm = TRUE) * 100
-    } else {
-      indicadores_filtrados$`txalfabet_2022`[1] * 100
-    }
-    
-    trata_na <- function(x) {
-      if (is.na(x) || length(x) == 0) {
-        "Não disponível"
-      } else {
-        format(round(x, 2), nsmall = 2)
-      }
-    }
-    
     HTML(paste0(
       "<p style='font-size:18px;'><b>Total de  registradas:</b> ", total_quedas, "</p>",
       "<hr>",
-      "<p style='font-size:18px;'><b>Indicadores Gerais:</b></p>",
-      "<ul>",
-      "<li><b>Densitometria (APAC/10.000 hab):</b> ", trata_na(densito), "</li>",
-      "<li><b>Cobertura da ESF (%):</b> ", trata_na(esf), "</li>",
-      "<li><b>Plano de Saúde (%):</b> ", trata_na(plano), "</li>",
-      "<li><b>Alfabetização (%):</b> ", trata_na(alf), "</li>",
       "</ul>"
     ))
   })
   
   
-  output$grafico_relatorio <- renderPlot({
-    # Leitura dos dados com tratamento de erros
-    fraturas <- tryCatch({
-      df <- read.csv("BANCO_FINAL_AIHs_CLASSIFICADAS(1).csv", encoding = "latin1") %>% 
-        mutate(MUNIC_RES = as.character(MUNIC_RES))
-      if(!all(c("MUNIC_RES", "ANO_CMPT") %in% colnames(df))) stop("Colunas obrigatórias faltando")
-      df
-    }, error = function(e) {
-      showNotification(paste("Erro nas fraturas:", e$message), type = "error")
-      NULL
-    })
+  # ───────────────────────────────────────────────────────────────────────
+  #  REACTIVE único com todos os dados combinados (mesma lógica de antes)
+  # ───────────────────────────────────────────────────────────────────────
+  dados_completos_rel <- reactive({
+    # ---- leitura das bases ----
+    fraturas     <- read.csv("BANCO_FINAL_AIHs_CLASSIFICADAS(1).csv", encoding = "latin1") %>%
+      mutate(MUNIC_RES = as.character(MUNIC_RES))
+    indicadores  <- read.csv("tabela_STC_txDensito10k_PR_2010_21_ac60anos.csv", encoding = "latin1") %>%
+      mutate(MUNIC_RES = as.character(MUNIC_RES))
     
-    indicadores <- tryCatch({
-      read.csv("tabela_STC_txDensito10k_PR_2010_21_ac60anos.csv", encoding = "latin1") %>% 
-        mutate(MUNIC_RES = as.character(MUNIC_RES))
-    }, error = function(e) {
-      showNotification(paste("Erro nos indicadores:", e$message), type = "error")
-      NULL
-    })
+    # ---- município selecionado ----
+    if (input$relatorio_municipio != "Paraná") {
+      cod_mun <- shape_pr %>%
+        filter(NM_MUN == input$relatorio_municipio) %>%
+        pull(CD_MUN_6) %>% as.character()
+      fraturas    <- fraturas    %>% filter(MUNIC_RES == cod_mun)
+      indicadores <- indicadores %>% filter(MUNIC_RES == cod_mun)
+    }
     
-    if(is.null(fraturas) || is.null(indicadores)) {
-      return(
-        ggplot() + 
-          annotate("text", x=1, y=1, label="Dados indisponíveis", size=6) + 
-          theme_void()
+    # ---- contagem de fraturas ----
+    dados_fraturas <- fraturas %>%
+      filter(!is.na(ANO_CMPT)) %>%
+      group_by(ANO_CMPT) %>%
+      summarise(fraturas = n(), .groups = "drop")
+    
+    # ---- indicadores: população idosa (÷1000) e densitometrias ----
+    dados_ind <- indicadores %>%
+      group_by(ANO_CMPT) %>%
+      summarise(
+        pop_idosa     = sum(pop_ac60 , na.rm = TRUE) / 1000,
+        densitometria = sum(n_densito, na.rm = TRUE),
+        .groups = "drop"
       )
-    }
     
-    # Obter código do município se não for "Paraná"
-    if(input$relatorio_municipio != "Paraná") {
-      cod_mun <- shape_pr %>% 
-        filter(NM_MUN == input$relatorio_municipio) %>% 
-        pull(CD_MUN_6) %>% 
-        as.character()
-      
-      if(length(cod_mun) == 0) {
-        return(
-          ggplot() + 
-            annotate("text", x=1, y=1, label="Município não encontrado", size=6) + 
-            theme_void()
-        )
-      }
-    }
-    
-    # Processamento dos dados - CONTAGEM DIRETA SEM AJUSTES
-    dados_fraturas <- if(input$relatorio_municipio == "Paraná") {
-      fraturas %>% 
-        filter(!is.na(ANO_CMPT)) %>%  # Filtra anos válidos
-        group_by(ANO_CMPT) %>% 
-        summarise(fraturas = n(), .groups = "drop")  # Contagem simples
-    } else {
-      fraturas %>% 
-        filter(MUNIC_RES == cod_mun, !is.na(ANO_CMPT)) %>% 
-        group_by(ANO_CMPT) %>% 
-        summarise(fraturas = n(), .groups = "drop")
-    }
-    
-    # Processamento dos indicadores (população e densitometrias)
-    dados_indicadores <- if(input$relatorio_municipio == "Paraná") {
-      indicadores %>% 
-        group_by(ANO_CMPT) %>% 
-        summarise(
-          pop_idosa = sum(pop_ac60, na.rm = TRUE)/1000,  # Já dividido por 1000
-          densitometria = sum(n_densito, na.rm = TRUE),
-          .groups = "drop"
-        )
-    } else {
-      indicadores %>% 
-        filter(MUNIC_RES == cod_mun) %>% 
-        select(ANO_CMPT, pop_idosa = pop_ac60, densitometria = n_densito) %>% 
-        mutate(pop_idosa = pop_idosa/1000)  # Dividido por 1000
-    }
-    
-    # Junção dos dados
-    dados_completos <- full_join(dados_fraturas, dados_indicadores, by = "ANO_CMPT") %>% 
-      replace_na(list(fraturas = 0, densitometria = 0, pop_idosa = 0)) %>% 
+    # ---- junção final ----
+    full_join(dados_fraturas, dados_ind, by = "ANO_CMPT") %>%
+      replace_na(list(fraturas = 0, pop_idosa = 0, densitometria = 0)) %>%
       arrange(ANO_CMPT)
+  })
+  
+  # ───────────────────────────────────────────────────────────────────────
+  #  GRÁFICO 1 — População idosa  ×  Fraturas
+  # ───────────────────────────────────────────────────────────────────────
+  output$grafico_pop_fraturas <- renderPlot({
+    dados <- dados_completos_rel()
+    if (nrow(dados) == 0) {
+      ggplot() + annotate("text", x = 1, y = 1, label = "Sem dados") + theme_void()
+    } else {
+      dados %>%
+        select(ANO_CMPT, pop_idosa, fraturas) %>%
+        pivot_longer(-ANO_CMPT, names_to = "variavel", values_to = "valor") %>%
+        mutate(
+          variavel = factor(variavel,
+                            levels = c("pop_idosa", "fraturas"),
+                            labels  = c("População ≥60 anos (milhares)", "Fraturas de Fêmur"))
+        ) %>%
+        ggplot(aes(x = ANO_CMPT, y = valor, color = variavel)) +
+        geom_line(size = 1.2) + geom_point(size = 3) +
+        scale_color_manual(values = c("#012340", "#014F86")) +
+        scale_x_continuous(breaks = 2010:2021) +
+        scale_y_continuous(labels = scales::comma_format(big.mark = ".", decimal.mark = ",")) +
+        labs(x = "Ano", color = NULL) +
+        theme_minimal(base_size = 14) +
+        theme(legend.position = "bottom",
+              panel.grid.minor = element_blank())
+    }
+  })
+  
+  # ───────────────────────────────────────────────────────────────────────
+  #  GRÁFICO 2 — Densitometrias
+  # ───────────────────────────────────────────────────────────────────────
+  output$grafico_densito <- renderPlot({
+    dados <- dados_completos_rel()
+    if (nrow(dados) == 0) {
+      ggplot() + annotate("text", x = 1, y = 1, label = "Sem dados") + theme_void()
+    } else {
+      ggplot(dados, aes(x = ANO_CMPT, y = densitometria)) +
+        geom_line(size = 1.2, color = "#027373") +
+        geom_point(size = 3,  color = "#027373") +
+        scale_x_continuous(breaks = 2010:2021) +
+        scale_y_continuous(labels = scales::comma_format(big.mark = ".", decimal.mark = ",")) +
+        labs(x = "Ano", y = "Densitometrias") +
+        theme_minimal(base_size = 14) +
+        theme(panel.grid.minor = element_blank())
+    }
+  })
+  
+  
+  # Função utilitária de formatação
+  trata_na <- function(x, casas = 2) {
+    if (is.na(x) || length(x) == 0) "N/D"
+    else format(round(x, casas), nsmall = casas, big.mark = ".",
+                decimal.mark = ",")
+  }
+  
+  # ───────────────────────────────────────────────────────────────────
+  # Reactive: calcula os quatro indicadores (reusa a mesma regra do relatório)
+  indicadores_box <- reactive({
+    dados_indicadores <- read.csv("gwrt.csv", encoding = "latin1")
     
-    # Verificação final dos dados
-    if(nrow(dados_completos) == 0 || all(dados_completos$fraturas == 0)) {
-      return(
-        ggplot() + 
-          annotate("text", x=1, y=1, label="Nenhum dado disponível", size=6) + 
-          theme_void()
-      )
+    if (input$relatorio_municipio != "Paraná") {
+      cd_mun <- shape_pr %>%
+        filter(NM_MUN == input$relatorio_municipio) %>%
+        pull(CD_MUN_6)
+      ind <- dados_indicadores %>% filter(MUNIC_RES == as.numeric(cd_mun))
+    } else {
+      ind <- dados_indicadores
     }
     
-    # Transformação para formato longo
-    dados_long <- dados_completos %>% 
-      pivot_longer(
-        cols = -ANO_CMPT,
-        names_to = "variavel",
-        values_to = "valor"
-      ) %>% 
-      mutate(
-        variavel = factor(
-          variavel,
-          levels = c("pop_idosa", "fraturas", "densitometria"),
-          labels = c("População ≥60 anos (milhares)", "Fraturas de Fêmur", "Densitometrias")
-        )
-      )
-    
-    # Criação do gráfico
-    ggplot(dados_long, aes(x = ANO_CMPT, y = valor, color = variavel)) +
-      geom_line(size = 1.2) +
-      geom_point(size = 3) +
-      scale_color_manual(
-        values = c(
-          "População ≥60 anos (milhares)" = "#012340",
-          "Fraturas de Fêmur" = "#014F86",
-          "Densitometrias" = "#027373"
-        )
-      ) +
-      scale_x_continuous(breaks = 2010:2021) +
-      scale_y_continuous(
-        labels = scales::comma_format(big.mark = ".", decimal.mark = ","),
-        limits = c(0, max(dados_long$valor, na.rm = TRUE) * 1.1)
-      ) +
-      labs(
-        x = "Ano",
-        color = "Indicador",
-        title = paste(input$relatorio_municipio),
-      ) +
-      theme_minimal(base_size = 14) +
-      theme(
-        legend.position = "bottom",
-        plot.title = element_text(hjust = 0.5, face = "bold"),
-        panel.grid.minor = element_blank()
-      )
+    list(
+      densito = if (input$relatorio_municipio == "Paraná")
+        mean(ind$tx_apac_densito10k, na.rm = TRUE)
+      else ind$tx_apac_densito10k[1],
+      esf     = if (input$relatorio_municipio == "Paraná")
+        mean(ind$cob_esf, na.rm = TRUE) * 100
+      else ind$cob_esf[1] * 100,
+      plano   = if (input$relatorio_municipio == "Paraná")
+        mean(ind$tpi, na.rm = TRUE) * 100
+      else ind$tpi[1] * 100,
+      alf     = if (input$relatorio_municipio == "Paraná")
+        mean(ind$txalfabet_2022, na.rm = TRUE) * 100
+      else ind$txalfabet_2022[1] * 100
+    )
   })
+  
+  # ───────────────────────────────────────────────────────────────────
+  # Saídas das quatro boxes
+  output$box_densito <- renderText(trata_na(indicadores_box()$densito))
+  output$box_esf     <- renderText(trata_na(indicadores_box()$esf))
+  output$box_plano   <- renderText(trata_na(indicadores_box()$plano))
+  output$box_alf     <- renderText(trata_na(indicadores_box()$alf))
   
 }
 

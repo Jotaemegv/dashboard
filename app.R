@@ -21,7 +21,6 @@ shape_pr <- st_read("PR_Municipios_2023.shp") %>%
   mutate(CD_MUN_6 = substr(as.character(CD_MUN), 1, 6))  # Truncar para 6 dígitos
 bbox <- st_bbox(shape_pr)
 
-# === UI
 ui <- dashboardPage(
   skin = "black",
   
@@ -270,7 +269,6 @@ ui <- dashboardPage(
                                    choices = c("Paraná", unique(shape_pr$NM_MUN)),
                                    selected = "Paraná")
                 ),
-    
               ),
               fluidRow(
                 column(width = 12,
@@ -303,35 +301,97 @@ ui <- dashboardPage(
               ),
               fluidRow(
                 box(
-                  width  = 3, solidHeader = TRUE, status = "primary",
+                  width  = 3, solidHeader = TRUE, 
+                  style = "background-color: #FFFFFF; border: 1px solid #D9D9D9;",
                   title  = "Densitometria (APAC/10 mil hab)",
                   style  = "height:120px; display:flex; align-items:center; justify-content:center;",
                   h3(textOutput("box_densito"))
                 ),
                 box(
-                  width  = 3, solidHeader = TRUE, status = "primary",
+                  style = "background-color: #FFFFFF; border: 1px solid #D9D9D9;",
+                  width  = 3, solidHeader = TRUE,
                   title  = "Cobertura ESF (%)",
                   style  = "height:120px; display:flex; align-items:center; justify-content:center;",
                   h3(textOutput("box_esf"))
                 ),
                 box(
-                  width  = 3, solidHeader = TRUE, status = "primary",
+                  width  = 3, solidHeader = TRUE,
+                  style = "background-color: #FFFFFF; border: 1px solid #D9D9D9;",
                   title  = "Plano de Saúde > 60 anos (%)",
                   style  = "height:120px; display:flex; align-items:center; justify-content:center;",
                   h3(textOutput("box_plano"))
                 ),
                 box(
-                  width  = 3, solidHeader = TRUE, status = "primary",
+                  width  = 3, solidHeader = TRUE, 
+                  style = "background-color: #FFFFFF; border: 1px solid #D9D9D9;",
                   title  = "Alfabetização > 60 anos(%)",
                   style  = "height:120px; display:flex; align-items:center; justify-content:center;",
                   h3(textOutput("box_alf"))
                 )
-              ),
-              
+              )
+      ),
+      
+      # --- Aba Referências ---
+      tabItem(tabName = "refs",
+              fluidRow(
+                column(
+                  width = 12,
+                  box(
+                    width = 12,
+                    solidHeader = TRUE,
+                    title = "REFERÊNCIAS",
+                    style = "background-color: #FFFFFF; border: 1px solid #D9D9D9;",
+                    div(
+                      style = "padding: 15px; font-size: 16px; line-height: 1.6; text-align: justify;",
+                      HTML("
+      <strong>1.</strong> BRASIL. Ministério da Saúde. Departamento de Informática do SUS - DATASUS. Disponível em: <a href='http://www2.datasus.gov.br/DATASUS/index.php?area=02' target='_blank'>http://www2.datasus.gov.br</a> <br><br>
+
+      <strong>2.</strong> BRASIL. Ministério da Saúde. Sistema de Informações Hospitalares do SUS (SIH/SUS). <br><br>
+
+      <strong>3.</strong> BRASIL. Ministério da Saúde. Secretaria de Atenção Primária à Saúde. Indicadores de cobertura da Atenção Básica. <br><br>
+
+      <strong>4.</strong> PARANÁ. Instituto Paranaense de Desenvolvimento Econômico e Social (IPARDES). Indicadores municipais. <br><br>
+
+      <strong>5.</strong> BRASIL. Agência Nacional de Saúde Suplementar (ANS). Informações de beneficiários. Disponível em: <a href='https://www.gov.br/ans' target='_blank'>https://www.gov.br/ans</a>
+    ")
+                    )
+                  )
+                )
+              )
       )
+      
     )
   )
 )
+
+# --- Aba Referências ---
+tabItem(tabName = "refs",
+        fluidRow(
+          column(
+            width = 12,
+            box(
+              width = 12,
+              solidHeader = TRUE,
+              title = "Referências",
+              div(
+                style = "padding: 15px; font-size: 16px; line-height: 1.6; text-align: justify;",
+                HTML("
+      <strong>1.</strong> BRASIL. Ministério da Saúde. Departamento de Informática do SUS - DATASUS. Disponível em: <a href='http://www2.datasus.gov.br/DATASUS/index.php?area=02' target='_blank'>http://www2.datasus.gov.br</a> <br><br>
+
+      <strong>2.</strong> BRASIL. Ministério da Saúde. Sistema de Informações Hospitalares do SUS (SIH/SUS). <br><br>
+
+      <strong>3.</strong> BRASIL. Ministério da Saúde. Secretaria de Atenção Primária à Saúde. Indicadores de cobertura da Atenção Básica. <br><br>
+
+      <strong>4.</strong> PARANÁ. Instituto Paranaense de Desenvolvimento Econômico e Social (IPARDES). Indicadores municipais. <br><br>
+
+      <strong>5.</strong> BRASIL. Agência Nacional de Saúde Suplementar (ANS). Informações de beneficiários. Disponível em: <a href='https://www.gov.br/ans' target='_blank'>https://www.gov.br/ans</a>
+                ")
+              )
+            ),
+          )
+        )
+)
+
 
 
 # === SERVER

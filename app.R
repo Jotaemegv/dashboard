@@ -35,6 +35,7 @@ ui <- dashboardPage(
                 menuItem("Análise de fraturas de quadril", tabName = "nova", icon = icon("chart-bar")),
                 menuItem("Variáveis associadas", tabName = "relatorio", icon = icon("file-alt")),
                 menuItem("Mapa de hotspot", tabName = "mapa", icon = icon("map")),
+                menuItem("Informações", tabName = "info", icon = icon("book")),
                 menuItem("Referências", tabName = "refs", icon = icon("book"))
     )
   ),
@@ -260,6 +261,50 @@ ui <- dashboardPage(
                 )
               )
       ),
+      tabItem(tabName = "mapa",
+              fluidRow(
+                column(width = 12,
+                       box(
+                         width = 12,
+                         solidHeader = TRUE,
+                         title = "Hot Spots Emergentes (2010–2021)",
+                         div(
+                           style = "height: 100%; display: flex; flex-direction: column; justify-content: space-between;",
+                           
+                           # Imagem do hotspot
+                           withSpinner(
+                             imageOutput("hotspot_plot", height = "700px", width = "1000px")
+                           ),
+                           
+                           # Texto explicativo
+                           div(
+                             style = "padding: 15px; font-size: 16px; color: #012340;",
+                             HTML("
+<h4>Como interpretar o Mapa de Hotspots:</h4>
+<ul>
+  <li>O mapa utiliza a técnica <b>Space-Time Cube</b> combinada com o índice <b>Getis-Ord&nbsp;Gi*</b>.</li>
+  <li><b>Hotspots</b> (vermelho): altas taxas de fratura de fêmur.</li>
+  <li><b>Coldspots</b> (azul): baixas taxas.</li>
+  <li>Áreas em branco: sem padrão espacial relevante.</li>
+</ul>
+
+<h5>Categorias dos padrões:</h5>
+<ul>
+  <li><b>Novo</b> – recém-identificado.</li>
+  <li><b>Persistente</b> – alta histórica.</li>
+  <li><b>Intensificando</b> – taxa crescendo.</li>
+  <li><b>Diminuição</b> – taxa caindo.</li>
+  <li><b>Oscilante / Esporádico / Histórico</b>.</li>
+</ul>
+
+<p><i>Nota: a análise combina dados espaciais e temporais para priorizar intervenções em saúde pública.</i></p>
+")
+                           )
+                         )
+                       )
+                )
+              )
+      ),
       
       # --- Aba Relatório ---
       tabItem(tabName = "relatorio",
@@ -330,39 +375,62 @@ ui <- dashboardPage(
                 )
               )
       ),
-      
-      # --- Aba Referências ---
-      tabItem(tabName = "refs",
+      tabItem(tabName = "info",
               fluidRow(
                 column(
                   width = 12,
                   box(
                     width = 12,
                     solidHeader = TRUE,
-                    title = "REFERÊNCIAS",
+                    title = "Referências",
                     style = "background-color: #FFFFFF; border: 1px solid #D9D9D9;",
                     div(
                       style = "padding: 15px; font-size: 16px; line-height: 1.6; text-align: justify;",
                       HTML("
-      <strong>1.</strong> BRASIL. Ministério da Saúde. Departamento de Informática do SUS - DATASUS. Disponível em: <a href='http://www2.datasus.gov.br/DATASUS/index.php?area=02' target='_blank'>http://www2.datasus.gov.br</a> <br><br>
+<h3 style='text-align:center; margin-top:0;'>Fratura de Fêmur em Idosos</h3>
 
-      <strong>2.</strong> BRASIL. Ministério da Saúde. Sistema de Informações Hospitalares do SUS (SIH/SUS). <br><br>
+<p>As fraturas de fêmur impõem consequências devastadoras à população idosa, sendo uma das principais causas de incapacidade funcional grave nessa faixa etária. De acordo com a Organização Mundial da Saúde (OMS), estima-se que, nos próximos seis anos, uma em cada seis pessoas terá mais de 60&nbsp;anos de idade, e até 2050 a população global com mais de 60&nbsp;anos alcançará 2,1&nbsp;bilhões (WHO, 2022).</p>
 
-      <strong>3.</strong> BRASIL. Ministério da Saúde. Secretaria de Atenção Primária à Saúde. Indicadores de cobertura da Atenção Básica. <br><br>
+<p>Este envelhecimento populacional é acompanhado, muitas vezes, por declínio funcional — incluindo deficiências cognitivas e incapacidades físicas — que resultam na perda da capacidade de realizar atividades básicas da vida diária e acarretam custos substanciais para a comunidade (Global Burden of Disease Study et&nbsp;al., 2018).</p>
 
-      <strong>4.</strong> PARANÁ. Instituto Paranaense de Desenvolvimento Econômico e Social (IPARDES). Indicadores municipais. <br><br>
+<p>Entre as adversidades enfrentadas por essa população, destacam-se as fraturas de fêmur. Suas complicações associadas podem ter desfechos fatais, incluindo hemorragia, infecção de ferida, embolia gordurosa e síndrome do desconforto respiratório agudo (Keel &amp; Trentz, 2005). Fraturas proximais de fêmur, ou fraturas de quadril, tipicamente ocorrem por fragilidade, com energia cinética menor ou igual à queda da própria altura (Babcock &amp; Kellam, 2018).</p>
 
-      <strong>5.</strong> BRASIL. Agência Nacional de Saúde Suplementar (ANS). Informações de beneficiários. Disponível em: <a href='https://www.gov.br/ans' target='_blank'>https://www.gov.br/ans</a>
-    ")
+<p>No Brasil, entre 2015 e 2020, registraram-se 510 302 internações por fratura de fêmur (Andrade et al., 2020). O coeficiente de mortalidade aproximado é de 5 % ao ano (Vasconcelos et al., 2020); mundialmente, a mortalidade no primeiro ano após a fratura varia de 22 % a 30 % (Downey, Kelly &amp; Quinlan, 2019).</p>
+
+<p>Nosso estudo analisou dados dos sistemas oficiais do DATASUS para os 399 municípios do Paraná (2010–2021). Foram registrados 39 226 casos de fraturas de fêmur em idosos, taxa média de incidência de 34,1 / 10 000 habitantes. As faixas etárias mais afetadas foram 80-89 anos (36,72 %) e 70-79 anos (33,70 %). Houve predominância feminina (66,83 %). A mortalidade geral foi de 6 %, ou 21,6 óbitos / 100 000 habitantes, maior entre homens e na faixa ≥ 90 anos (13 %).</p>
+
+<p>Este dashboard é produto do mestrado no Programa de Pós-Graduação em Gestão, Tecnologia e Inovação em Urgência e Emergência (PROFURG/UEM), em parceria com o GETS. Integra análises espaço-temporais e regressão espacial para oferecer aos gestores de saúde uma ferramenta interativa que subsidia decisões estratégicas e políticas públicas para a população idosa.</p>
+
+<h4 style='margin-top:1.2em;'>Equipe de desenvolvimento</h4>
+<ul>
+  <li><strong>Júlia Loverde Gabella</strong> — Mestranda (concepção, desenvolvimento, análises e supervisão). Contato: <a href='mailto:julialgabella@gmail.com'>julialgabella@gmail.com</a></li>
+  <li><strong>Luciano de Andrade</strong> — Orientador, coordenador do PROFURG (supervisão acadêmica e metodológica). Contato: <a href='mailto:landrade@uem.br'>landrade@uem.br</a></li>
+  <li><strong>Iago Amado Peres Gualda</strong> — Análises estatísticas e espaciais</li>
+  <li><strong>Matheus Henrique Arruda Beltrame</strong> — Análises estatísticas e espaciais</li>
+  <li><strong>William Filipin Costa</strong> — Análises estatísticas e espaciais</li>
+  <li><strong>Thais Fernanda Hachmann</strong> — Análises estatísticas e espaciais</li>
+  <li><strong>Matheus Lara Campos</strong> — Estruturação do dashboard e apoio técnico</li>
+  <li><strong>João Marcelo Granzotto Vicente</strong> — Estruturação do dashboard e apoio técnico</li>
+</ul>
+
+<h4 style='margin-top:1.2em;'>Referências</h4>
+<ol style='margin-left: -20px;'>
+  <li>ANDRADE, Luciano de et al. <em>System dynamics modeling …</em> <strong>PloS One</strong>, 2014.</li>
+  <li>BABCOCK, S.; KELLAM, J. F. <em>Hip fracture nonunions …</em> <strong>Advances in Orthopedics</strong>, 2018.</li>
+  <li>DOWNEY, C.; KELLY, M.; QUINLAN, J. F. <em>Changing trends in the mortality rate …</em> <strong>World Journal of Orthopedics</strong>, 2019.</li>
+  <li>GLOBAL BURDEN OF DISEASE STUDY 2017 et al. <strong>The Lancet</strong>, 2018.</li>
+  <li>KEEL, M.; TRENTZ, O. <em>Pathophysiology of polytrauma</em>. <strong>Injury</strong>, 2005.</li>
+  <li>VASCONCELOS, P. A. B. de et al. <em>Femoral fractures in the elderly …</em> <strong>Rev. Assoc. Méd. Bras.</strong>, 2020.</li>
+  <li>WORLD HEALTH ORGANIZATION. <em>Ageing and health</em>. 2022. Disponível em: <a href='https://www.who.int/news-room/fact-sheets/detail/ageing-and-health' target='_blank'>WHO</a>.</li>
+</ol>
+")
+                      
                     )
                   )
                 )
               )
-      )
-      
-    )
-  )
-)
+      ), 
+    
 
 # --- Aba Referências ---
 tabItem(tabName = "refs",
@@ -390,8 +458,10 @@ tabItem(tabName = "refs",
             ),
           )
         )
+      )
+    )
+  )
 )
-
 
 
 # === SERVER
@@ -1039,11 +1109,11 @@ server <- function(input, output, session) {
       group_by(ANO_CMPT) %>%
       summarise(fraturas = n(), .groups = "drop")
     
-    # ---- indicadores: população idosa (÷1000) e densitometrias ----
+    # ---- indicadores: população idosa (÷100) e densitometrias ----
     dados_ind <- indicadores %>%
       group_by(ANO_CMPT) %>%
       summarise(
-        pop_idosa     = sum(pop_ac60 , na.rm = TRUE) / 1000,
+        pop_idosa     = sum(pop_ac60 , na.rm = TRUE) / 100,
         densitometria = sum(n_densito, na.rm = TRUE),
         .groups = "drop"
       )
@@ -1068,7 +1138,7 @@ server <- function(input, output, session) {
         mutate(
           variavel = factor(variavel,
                             levels = c("pop_idosa", "fraturas"),
-                            labels  = c("População ≥60 anos (milhares)", "Fraturas de Fêmur"))
+                            labels  = c("População ≥60 anos (centenas)", "Fraturas de Fêmur"))
         ) %>%
         ggplot(aes(x = ANO_CMPT, y = valor, color = variavel)) +
         geom_line(size = 1.2) + geom_point(size = 3) +
